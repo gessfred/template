@@ -1,0 +1,41 @@
+name: Docker Image CI
+
+on:
+  push:
+    branches: [ ]
+    paths:
+      - 'app/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - run: echo ${{ secrets.REGISTRY_TOKEN }} | docker login ghcr.io -u USERNAME --password-stdin
+    - run: docker build . --file ./app/Dockerfile --build-arg REACT_APP_VERSION=$GITHUB_SHA --tag "ghcr.io/gessfred/nginx/example:$GITHUB_SHA"
+    - run: docker push "ghcr.io/gessfred/nginx/example:$GITHUB_SHA"
+    - run: docker build . --file ./app/Dockerfile --build-arg REACT_APP_VERSION=$GITHUB_SHA --tag "ghcr.io/gessfred/nginx/example:latest"
+    - run: docker push "ghcr.io/gessfred/nginx/example:latest"
+  
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps: 
+    - uses: actions/checkout@v3
+    - run: sudo snap install doctl
+    - run: sudo snap connect doctl:kube-config
+    - run: sudo mkdir /home/runner/.config/doctl
+    - run: sudo doctl auth init -t ${{ secrets.DIGITAL_OCEAN_TOKEN }}
+    - run: sudo apt-get install -y ca-certificates curl
+    - run: curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+    - run: echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+    - run: sudo apt-get update -y && sudo apt-get install -y kubectl
+    - run: sudo mkdir /root/.kube
+    - run: sudo doctl kubernetes cluster kubeconfig save k8s-amiscan-1-22-7-do-0-fra1-1648193990670
+    - run: sed -i "s/:latest/:${GITHUB_SHA}/g" ./nginx.yaml
+    - run: sed -i "s/<deployment>/app/g" ./nginx.yaml
+    - run: sed -i "s/<svc>/app-svc/g" ./nginx.yaml
+    - run: sed -i "s/example.com/app-svc/g" ./nginx.yaml
+    - run: sudo kubectl config get-contexts
+    - run: sudo kubectl config use-context do-fra1-k8s-amiscan-1-22-7-do-0-fra1-1648193990670
+    - run: sudo kubectl apply -f nginx.yaml

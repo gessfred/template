@@ -1,0 +1,60 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: <svc>
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 80
+  selector:
+    app: <deployment>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <deployment>
+spec:
+  selector:
+    matchLabels:
+      app: <deployment>
+  template:
+    metadata:
+      labels:
+        app: <deployment>
+    spec:
+      containers:
+      - name: <deployment>
+        image: <image>
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        env:
+        - name: HTTP_PORT
+          value: '80'
+      imagePullSecrets:
+      - name: github-regcred
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: <deployment>-ingress
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+spec:
+  tls:
+  - hosts:
+    - example.com
+    secretName: <deployment>-nginx-tls
+  rules:
+  - host: example.com
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: <svc>
+            port:
+              number: 80
