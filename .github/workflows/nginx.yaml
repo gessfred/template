@@ -18,6 +18,7 @@ jobs:
     - run: docker push "ghcr.io/gessfred/nginx/example:latest"
   
   deploy:
+    if: false
     needs: build
     runs-on: ubuntu-latest
     steps: 
